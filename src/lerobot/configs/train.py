@@ -168,6 +168,9 @@ class TrainPipelineConfig(HubMixin):
     # Checkpoint is saved every `save_freq` training iterations and after the last training step.
     # A non-positive value disables periodic saving, keeping only the final checkpoint.
     save_freq: int = 20_000
+    # Keep only the N most recent step checkpoints, deleting older ones after each save
+    # (the one `last` points to is never deleted). 0 keeps every checkpoint.
+    keep_last_n_checkpoints: int = 0
     # Model-artifact format inside checkpoints; non-default values require a sharded run.
     checkpoint_format: CheckpointFormat = CheckpointFormat.SAFETENSORS
     use_policy_training_preset: bool = True
@@ -283,6 +286,8 @@ class TrainPipelineConfig(HubMixin):
         # `base_model`); the resumed weights and processors load from `checkpoint_path`.
 
     def validate(self) -> None:
+        if self.keep_last_n_checkpoints < 0:
+            raise ValueError(f"keep_last_n_checkpoints must be >= 0, got {self.keep_last_n_checkpoints}.")
         available_contexts = multiprocessing.get_all_start_methods()
         if (
             self.dataloader_multiprocessing_context is not None

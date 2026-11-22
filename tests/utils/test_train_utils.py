@@ -28,6 +28,7 @@ from lerobot.common.train_utils import (
     get_step_checkpoint_dir,
     get_step_identifier,
     load_training_metadata,
+    prune_old_checkpoints,
     push_checkpoint_to_hub,
     save_training_metadata,
     save_training_state,
@@ -102,6 +103,38 @@ def test_update_last_checkpoint(tmp_path):
     last_checkpoint = tmp_path / LAST_CHECKPOINT_LINK
     assert last_checkpoint.is_symlink()
     assert last_checkpoint.resolve() == checkpoint
+
+
+def _make_step_checkpoints(checkpoints_dir, steps):
+    for step in steps:
+        (checkpoints_dir / get_step_identifier(step, 500_000) / "pretrained_model").mkdir(parents=True)
+
+
+def test_prune_old_checkpoints_keeps_the_newest(tmp_path):
+    # Steps sort numerically, not by name, and non-step entries are left alone.
+    _make_step_checkpoints(tmp_path, [50_000, 100_000, 150_000, 9_000])
+    (tmp_path / "notes").mkdir()
+    update_last_checkpoint(tmp_path / "150000")
+    deleted = prune_old_checkpoints(tmp_path, keep=1)
+    assert sorted(p.name for p in deleted) == ["009000", "050000", "100000"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["150000", LAST_CHECKPOINT_LINK, "notes"]
+    assert (tmp_path / LAST_CHECKPOINT_LINK).resolve() == tmp_path / "150000"
+
+
+def test_prune_old_checkpoints_never_deletes_the_last_target(tmp_path):
+    _make_step_checkpoints(tmp_path, [50_000, 100_000])
+    update_last_checkpoint(tmp_path / "050000")  # e.g. a run resumed from an older checkpoint
+    assert prune_old_checkpoints(tmp_path, keep=1) == []
+    assert (tmp_path / "050000").is_dir() and (tmp_path / "100000").is_dir()
+
+
+def test_prune_old_checkpoints_keep_n(tmp_path):
+    _make_step_checkpoints(tmp_path, [1, 2, 3, 4])
+    update_last_checkpoint(tmp_path / "000004")
+    prune_old_checkpoints(tmp_path, keep=2)
+    assert sorted(p.name for p in tmp_path.iterdir() if p.name.isdigit()) == ["000003", "000004"]
+    with pytest.raises(ValueError):
+        prune_old_checkpoints(tmp_path, keep=0)
 
 
 # save_checkpoint round-trips (all formats, real policies) live in

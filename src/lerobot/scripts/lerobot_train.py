@@ -51,6 +51,7 @@ from lerobot.common.train_utils import (
     get_step_checkpoint_dir,
     get_step_identifier,
     load_training_metadata,
+    prune_old_checkpoints,
     publish_trained_model,
     push_checkpoint_to_hub,
     resume_after_prepare,
@@ -949,6 +950,11 @@ def train(cfg: TrainPipelineConfig) -> None:
             )
             if is_main_process():
                 update_last_checkpoint(checkpoint_dir)
+                # save_checkpoint returns once every rank has written its shards, so the new
+                # checkpoint is complete before any older one is removed.
+                if cfg.keep_last_n_checkpoints > 0:
+                    for removed in prune_old_checkpoints(checkpoint_dir.parent, cfg.keep_last_n_checkpoints):
+                        logging.info(f"Removed old checkpoint {removed}")
                 if cfg.save_checkpoint_to_hub:
                     if cfg.policy is None or not cfg.policy.repo_id:
                         # Already rejected by cfg.validate().

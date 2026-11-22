@@ -25,6 +25,7 @@ its writes live in the same method.
 
 import logging
 import os
+import shutil
 from importlib.resources import files
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -146,6 +147,36 @@ def update_last_checkpoint(checkpoint_dir: Path) -> None:
         last_checkpoint_dir.unlink()
     relative_target = checkpoint_dir.relative_to(checkpoint_dir.parent)
     last_checkpoint_dir.symlink_to(relative_target)
+
+
+def prune_old_checkpoints(checkpoints_dir: Path, keep: int) -> list[Path]:
+    """Delete all but the ``keep`` most recent step checkpoints in ``checkpoints_dir``.
+
+    Only directories named by a step identifier (digits only) are considered, ordered by step.
+    The checkpoint the `last` link points to is always kept, as are any other entries.
+
+    Args:
+        checkpoints_dir (Path): The run's `checkpoints/` directory.
+        keep (int): How many of the most recent step checkpoints to keep; must be >= 1.
+
+    Returns:
+        list[Path]: The deleted checkpoint directories.
+    """
+    if keep < 1:
+        raise ValueError(f"keep must be >= 1, got {keep}")
+    step_dirs = sorted(
+        (p for p in checkpoints_dir.iterdir() if p.is_dir() and not p.is_symlink() and p.name.isdigit()),
+        key=lambda p: int(p.name),
+    )
+    last_link = checkpoints_dir / LAST_CHECKPOINT_LINK
+    last_target = last_link.resolve() if last_link.is_symlink() else None
+    deleted = []
+    for step_dir in step_dirs[:-keep]:
+        if last_target is not None and step_dir.resolve() == last_target:
+            continue
+        shutil.rmtree(step_dir)
+        deleted.append(step_dir)
+    return deleted
 
 
 # ---------------------------------------------------------------------------------------------
