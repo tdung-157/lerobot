@@ -228,7 +228,11 @@
             "wrap_modules": [
                 "GemmaMLP",
                 "SiglipEncoderLayer"
-            ]
+            ],
+            "mixed_precision_policy": {
+                "param_dtype": "bfloat16",
+                "reduce_dtype": "float32"
+            }
         }
     },
     "trackio": {
