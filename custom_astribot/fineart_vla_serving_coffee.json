@@ -198,7 +198,8 @@
     "max_eval_samples": 4800,
     "log_freq": 50,
     "save_checkpoint": true,
-    "save_freq": 25000,
+    "save_freq": 50000,
+    "keep_last_n_checkpoints": 1,
     "checkpoint_format": "safetensors_dcp",
     "use_policy_training_preset": false,
     "optimizer": {
