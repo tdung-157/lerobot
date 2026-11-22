@@ -1,0 +1,216 @@
+{
+    "dataset": {
+        "repo_id": "local/m2v2_fold_clothes_merged_clean_arms16",
+        "root": "/mnt/data/dungnt232_1/data/m2v2_fold_clothes_merged_clean_arms16",
+        "video_backend": "torchcodec"
+    },
+    "policy": {
+        "type": "fineart_vla",
+        "n_obs_steps": 1,
+        "input_features": {
+            "observation.state": {
+                "type": "STATE",
+                "shape": [
+                    16
+                ]
+            },
+            "observation.images.cam_head": {
+                "type": "VISUAL",
+                "shape": [
+                    3,
+                    400,
+                    640
+                ]
+            },
+            "observation.images.cam_left_wrist": {
+                "type": "VISUAL",
+                "shape": [
+                    3,
+                    480,
+                    640
+                ]
+            },
+            "observation.images.cam_right_wrist": {
+                "type": "VISUAL",
+                "shape": [
+                    3,
+                    480,
+                    640
+                ]
+            }
+        },
+        "output_features": {
+            "action": {
+                "type": "ACTION",
+                "shape": [
+                    16
+                ]
+            }
+        },
+        "device": "cuda",
+        "use_amp": false,
+        "use_peft": false,
+        "push_to_hub": false,
+        "repo_id": null,
+        "private": null,
+        "tags": null,
+        "license": null,
+        "pretrained_path": "lerobot/FineART-VLA-subtask-midtrained",
+        "pretrained_revision": "b6cf4faf2630f971dd390bc32365e9d9c330da8e",
+        "paligemma_variant": "gemma_2b",
+        "action_expert_variant": "gemma_300m",
+        "dtype": "float32",
+        "chunk_size": 50,
+        "n_action_steps": 50,
+        "max_state_dim": 32,
+        "max_action_dim": 32,
+        "num_inference_steps": 10,
+        "time_sampling_beta_alpha": 1.5,
+        "time_sampling_beta_beta": 1.0,
+        "time_sampling_scale": 0.999,
+        "time_sampling_offset": 0.001,
+        "min_period": 0.004,
+        "max_period": 4.0,
+        "use_relative_actions": true,
+        "relative_exclude_joints": [
+            "gripper"
+        ],
+        "action_feature_names": [
+            "kLeftShoulderPitch",
+            "kLeftShoulderRoll",
+            "kLeftShoulderYaw",
+            "kLeftElbow",
+            "kLeftWristYaw",
+            "kLeftWristPitch",
+            "kLeftWristRoll",
+            "kRightShoulderPitch",
+            "kRightShoulderRoll",
+            "kRightShoulderYaw",
+            "kRightElbow",
+            "kRightWristYaw",
+            "kRightWristPitch",
+            "kRightWristRoll",
+            "kLeftGripper",
+            "kRightGripper"
+        ],
+        "rtc_config": null,
+        "image_resolution": [
+            224,
+            224
+        ],
+        "empty_cameras": 0,
+        "tokenizer_max_length": 128,
+        "normalization_mapping": {
+            "VISUAL": "IDENTITY",
+            "STATE": "QUANTILES",
+            "ACTION": "QUANTILES"
+        },
+        "gradient_checkpointing": true,
+        "compile_model": false,
+        "compile_mode": "default",
+        "freeze_vision_encoder": false,
+        "train_expert_only": false,
+        "optimizer_lr": 2.5e-05,
+        "optimizer_betas": [
+            0.9,
+            0.95
+        ],
+        "optimizer_eps": 1e-08,
+        "optimizer_weight_decay": 1e-10,
+        "optimizer_grad_clip_norm": 1.0,
+        "scheduler_warmup_steps": 2000,
+        "scheduler_decay_steps": 500000,
+        "scheduler_decay_lr": 5e-06,
+        "recipe_path": null,
+        "text_loss_weight": 0.0,
+        "flow_loss_weight": 10.0,
+        "unfreeze_lm_head": true,
+        "enable_fast_action_loss": true,
+        "action_tokenizer_name": "lerobot/fast-action-tokenizer@3d4d8dd847c5333f1cb0f54d00074ba22b14a5b7",
+        "max_action_tokens": 384,
+        "fast_skip_tokens": 128,
+        "fast_action_loss_weight": 1.0,
+        "auto_fit_fast_tokenizer": true,
+        "fast_tokenizer_cache_dir": "~/.cache/lerobot/fast_tokenizers",
+        "fast_tokenizer_fit_samples": 16384,
+        "fast_tokenizer_validation_samples": 256,
+        "fast_tokenizer_max_reconstruction_rmse": 0.1,
+        "fast_tokenizer_max_dim_rmse": 0.2,
+        "knowledge_insulation": true,
+        "use_flashrt_adarms": false,
+        "use_compiled_text_ce": true,
+        "use_compiled_vision": false,
+        "use_flex_attention": false,
+        "use_manual_attention": false,
+        "manual_attention_scope": "all",
+        "lm_head_lr_scale": 1.0,
+        "backbone_lr_scale": 1.0,
+        "action_expert_lr_scale": 1.0,
+        "flow_num_repeats": 1,
+        "text_ce_z_loss_weight": 0.0001,
+        "optimizer_foreach": false,
+        "optimizer_fused": true,
+        "recipe": {
+            "blend": {
+                "low_level_execution": {
+                    "weight": 1.0,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "${task}",
+                            "stream": "low_level"
+                        }
+                    ]
+                }
+            }
+        },
+        "trust_remote_code": true
+    },
+    "output_dir": "outputs/fineart_vla_m2v2_fold_clothes",
+    "job_name": "fineart_vla_m2v2_fold_clothes",
+    "seed": 1000,
+    "num_workers": 12,
+    "batch_size": 8,
+    "prefetch_factor": 4,
+    "steps": 500000,
+    "env_eval_freq": 0,
+    "log_freq": 50,
+    "save_checkpoint": true,
+    "save_freq": 25000,
+    "checkpoint_format": "safetensors_dcp",
+    "use_policy_training_preset": false,
+    "optimizer": {
+        "type": "adamw",
+        "lr": 2.5e-05,
+        "weight_decay": 1e-10,
+        "grad_clip_norm": 1.0,
+        "betas": [
+            0.9,
+            0.95
+        ],
+        "eps": 1e-08
+    },
+    "scheduler": {
+        "type": "cosine_decay_with_warmup",
+        "num_warmup_steps": 2000,
+        "num_decay_steps": 500000,
+        "peak_lr": 2.5e-05,
+        "decay_lr": 5e-06
+    },
+    "parallelism": {
+        "dp_shard": -1
+    },
+    "accelerator": {
+        "mixed_precision": "bf16",
+        "fsdp": {
+            "wrap_modules": [
+                "GemmaMLP",
+                "SiglipEncoderLayer"
+            ]
+        }
+    },
+    "trackio": {
+        "enable": false,
+        "project": "fineart-vla-motion2"
+    }
+}
