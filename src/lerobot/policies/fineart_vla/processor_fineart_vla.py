@@ -50,6 +50,7 @@ from lerobot.processor.pipeline import ProcessorStep, ProcessorStepRegistry
 # Import directly to keep optional language dependencies out of ``lerobot.processor``.
 from lerobot.processor.render_messages_processor import RenderRuntimeMessagesStep, RenderTrainingMessagesStep
 from lerobot.utils.constants import (
+    LANGUAGE_PERSISTENT,
     OBS_LANGUAGE_ATTENTION_MASK,
     OBS_LANGUAGE_TOKENS,
     OBS_STATE,
@@ -421,6 +422,84 @@ class FineARTVLATextTokenizerStep(ProcessorStep):
         return features
 
 
+@dataclass
+@ProcessorStepRegistry.register(name="fineart_vla_subtask_boundary_hold")
+class SubtaskBoundaryHoldStep(ProcessorStep):
+    """Hold the active subtask's last action for the chunk steps that fall after the subtask ends.
+
+    A sample is conditioned on the subtask active at its first frame, but its action chunk can run
+    into the next subtask. Replacing those steps with the subtask's final action (absolute, before
+    relative conversion and normalization) teaches the policy to stop once its subtask is done.
+    Subtask starts come from the ``style=subtask`` rows of ``language_persistent``. Episode ends need
+    no handling: the dataset already pads past them by repeating the last frame. Without an action
+    chunk or language rows (inference, unannotated data) the step does nothing.
+    """
+
+    enabled: bool = False
+    fps: float | None = None
+
+    def get_config(self) -> dict[str, Any]:
+        return {"enabled": self.enabled, "fps": self.fps}
+
+    def __call__(self, transition: EnvTransition) -> EnvTransition:
+        if not self.enabled:
+            return transition
+        action = transition.get(TransitionKey.ACTION)
+        complementary = transition.get(TransitionKey.COMPLEMENTARY_DATA) or {}
+        persistent = complementary.get(LANGUAGE_PERSISTENT)
+        timestamps = complementary.get("timestamp")
+        if (
+            not isinstance(action, torch.Tensor)
+            or action.ndim != 3
+            or persistent is None
+            or timestamps is None
+        ):
+            return transition
+        if self.fps is None or self.fps <= 0:
+            raise ValueError("SubtaskBoundaryHoldStep needs the dataset fps to locate subtask ends.")
+
+        # One sample may arrive unbatched (a flat row list) after AddBatchDimension.
+        if isinstance(persistent, list) and (not persistent or isinstance(persistent[0], dict)):
+            persistent = [persistent]
+        ts = torch.as_tensor(timestamps).reshape(-1).tolist()
+        if len(persistent) != action.shape[0] or len(ts) != action.shape[0]:
+            raise ValueError(
+                f"batch size mismatch: action {action.shape[0]}, language rows {len(persistent)}, timestamps {len(ts)}"
+            )
+
+        horizon = action.shape[1]
+        half_frame = 0.5 / self.fps
+        new_action = None
+        for b, (rows, t) in enumerate(zip(persistent, ts, strict=True)):
+            next_starts = [
+                float(r["timestamp"])
+                for r in rows or []
+                if r.get("style") == "subtask"
+                and r.get("timestamp") is not None
+                and float(r["timestamp"]) > t + half_frame
+            ]
+            if not next_starts:
+                continue
+            # Steps 0..keep-1 are still inside the active subtask; step keep is the next one's first frame.
+            keep = round((min(next_starts) - t) * self.fps)
+            if keep >= horizon:
+                continue
+            if new_action is None:
+                new_action = action.clone()
+            new_action[b, keep:] = new_action[b, keep - 1]
+
+        if new_action is None:
+            return transition
+        new_transition = transition.copy()
+        new_transition[TransitionKey.ACTION] = new_action
+        return new_transition
+
+    def transform_features(
+        self, features: dict[PipelineFeatureType, dict[str, PolicyFeature]]
+    ) -> dict[PipelineFeatureType, dict[str, PolicyFeature]]:
+        return features
+
+
 if TYPE_CHECKING:
     from lerobot.datasets.recipe import TrainingRecipe
 
@@ -470,6 +549,11 @@ def make_fineart_vla_pre_post_processors(
     input_steps = [
         RenameObservationsProcessorStep(rename_map={}),
         AddBatchDimensionProcessorStep(),
+        # Must see absolute, unnormalized actions, so it runs before the relative/normalize steps.
+        SubtaskBoundaryHoldStep(
+            enabled=config.hold_after_subtask_end,
+            fps=float(dataset_meta.fps) if dataset_meta is not None else None,
+        ),
         relative_step,
         NormalizerProcessorStep(
             features={**config.input_features, **config.output_features},

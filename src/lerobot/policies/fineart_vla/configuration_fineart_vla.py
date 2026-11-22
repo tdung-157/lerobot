@@ -70,6 +70,12 @@ class FineARTVLAConfig(PI05Config):
     memory_scratchpad: bool = False
     """Legacy checkpoint guard: combined responses require a scratchpad-aware controller."""
 
+    hold_after_subtask_end: bool = False
+    """Training only: in each action chunk, replace the steps after the active ``subtask`` ends with
+    that subtask's last action, so the policy learns to stop when its subtask is done instead of
+    continuing into the next one. Reads the boundaries from ``language_persistent``; a no-op at
+    inference and on datasets without subtask annotations."""
+
     # Balance frequent recipe text supervision against the paper's α=10 flow weight.
     text_loss_weight: float = 1.0
     """Text cross-entropy weight; ``0`` disables it."""
