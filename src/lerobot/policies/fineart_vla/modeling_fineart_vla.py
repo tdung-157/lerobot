@@ -295,6 +295,26 @@ def _enable_hf_kernels() -> None:
     logger.info("FineART-VLA: HF kernels (Liger) enabled — rope, geglu fused.")
 
 
+def predict_actions_any_across_ranks(predict_actions_t: Tensor | None) -> bool:
+    """Whether any sample on any rank trains actions this step.
+
+    The flow/FAST paths run the action expert, whose FSDP units all-gather their parameters. A rank
+    whose micro-batch holds only text samples would skip them while the other ranks wait in the
+    gather, and the job deadlocks. So the decision is OR-reduced across ranks: every rank runs the
+    action path if any rank needs it, and a rank without action samples contributes zero loss (both
+    losses mask by ``predict_actions``). Single-process runs keep the local decision.
+    """
+    if predict_actions_t is None:
+        return True
+    local_any = predict_actions_t.any()
+    dist = torch.distributed
+    if dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1:
+        flag = local_any.to(torch.int32).reshape(1)
+        dist.all_reduce(flag, op=dist.ReduceOp.MAX)
+        return bool(flag.item())
+    return bool(local_any.item())
+
+
 def _reduce_action_loss(per_sample: Tensor, predict_actions_t: Tensor | None, reduction: str) -> Tensor:
     """Mask non-action samples and apply the requested batch reduction."""
     if predict_actions_t is None:
@@ -797,7 +817,7 @@ class FineARTVLAPolicy(PI05Policy):
             return super().forward(batch, reduction=reduction)
 
         # Compute the host-side action-routing decision once for both flow and FAST.
-        predict_any = predict_actions_t is None or bool(predict_actions_t.any().item())
+        predict_any = predict_actions_any_across_ranks(predict_actions_t)
         run_flow = self.config.flow_loss_weight > 0 and predict_any
         run_text = self.config.text_loss_weight > 0 and text_labels is not None
 
